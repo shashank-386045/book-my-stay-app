@@ -35,6 +35,31 @@ class Reservation {
     }
 }
 
+class Inventory {
+    private Map<String, Integer> roomAvailability = new HashMap<>();
+
+    public Inventory() {
+        roomAvailability.put("Standard", 2);
+        roomAvailability.put("Deluxe", 1);
+        roomAvailability.put("Suite", 1);
+    }
+
+    public void bookRoom(String roomType) {
+        int available = roomAvailability.getOrDefault(roomType, 0);
+        if (available <= 0) throw new IllegalStateException("No rooms available for type: " + roomType);
+        roomAvailability.put(roomType, available - 1);
+    }
+
+    public void restoreRoom(String roomType) {
+        int available = roomAvailability.getOrDefault(roomType, 0);
+        roomAvailability.put(roomType, available + 1);
+    }
+
+    public Map<String, Integer> getAvailability() {
+        return roomAvailability;
+    }
+}
+
 class BookingHistory {
     private List<Reservation> confirmedBookings = new ArrayList<>();
 
@@ -42,43 +67,76 @@ class BookingHistory {
         confirmedBookings.add(reservation);
     }
 
+    public void removeBooking(String reservationId) {
+        confirmedBookings.removeIf(r -> r.getReservationId().equals(reservationId));
+    }
+
     public List<Reservation> getAllBookings() {
         return confirmedBookings;
     }
 }
 
-class BookingReportService {
+class CancellationService {
     private BookingHistory history;
+    private Inventory inventory;
+    private Stack<String> rollbackStack = new Stack<>();
 
-    public BookingReportService(BookingHistory history) {
+    public CancellationService(BookingHistory history, Inventory inventory) {
         this.history = history;
+        this.inventory = inventory;
     }
 
-    public void generateReport() {
-        List<Reservation> bookings = history.getAllBookings();
-        System.out.println("=== Booking Report ===");
-        for (Reservation r : bookings) {
-            System.out.println(r);
+    public void cancelReservation(String reservationId) {
+        Optional<Reservation> reservationOpt = history.getAllBookings().stream()
+                .filter(r -> r.getReservationId().equals(reservationId))
+                .findFirst();
+        if (!reservationOpt.isPresent()) {
+            System.out.println("Cancellation failed: Reservation not found.");
+            return;
         }
-        double totalRevenue = bookings.stream().mapToDouble(Reservation::getCost).sum();
-        System.out.println("Total Bookings: " + bookings.size());
-        System.out.println("Total Revenue: ₹" + totalRevenue);
+        Reservation reservation = reservationOpt.get();
+        rollbackStack.push(reservation.getRoomType());
+        inventory.restoreRoom(reservation.getRoomType());
+        history.removeBooking(reservationId);
+        System.out.println("Cancellation successful for " + reservationId);
+    }
+
+    public Stack<String> getRollbackStack() {
+        return rollbackStack;
     }
 }
 
-public class bookmystayapp{
+public class bookmystayapp {
     public static void main(String[] args) {
+        Inventory inventory = new Inventory();
         BookingHistory history = new BookingHistory();
-        BookingReportService reportService = new BookingReportService(history);
+        CancellationService cancellationService = new CancellationService(history, inventory);
 
-        Reservation r1 = new Reservation("RES101", "Alice", "Deluxe", 3000.0);
-        Reservation r2 = new Reservation("RES102", "Bob", "Suite", 5000.0);
-        Reservation r3 = new Reservation("RES103", "Charlie", "Standard", 2000.0);
+        Reservation r1 = new Reservation("RES301", "Alice", "Deluxe", 3000.0);
+        Reservation r2 = new Reservation("RES302", "Bob", "Suite", 5000.0);
 
+        inventory.bookRoom(r1.getRoomType());
         history.addBooking(r1);
-        history.addBooking(r2);
-        history.addBooking(r3);
 
-        reportService.generateReport();
+        inventory.bookRoom(r2.getRoomType());
+        history.addBooking(r2);
+
+        System.out.println("=== Confirmed Reservations ===");
+        for (Reservation r : history.getAllBookings()) {
+            System.out.println(r);
+        }
+
+        cancellationService.cancelReservation("RES301");
+
+        System.out.println("=== Reservations After Cancellation ===");
+        for (Reservation r : history.getAllBookings()) {
+            System.out.println(r);
+        }
+
+        System.out.println("=== Remaining Inventory ===");
+        System.out.println(inventory.getAvailability());
+
+        System.out.println("=== Rollback Stack ===");
+        System.out.println(cancellationService.getRollbackStack());
     }
 }
