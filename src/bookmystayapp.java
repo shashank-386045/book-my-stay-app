@@ -1,5 +1,11 @@
 import java.util.*;
 
+class InvalidBookingException extends Exception {
+    public InvalidBookingException(String message) {
+        super(message);
+    }
+}
+
 class Reservation {
     private String reservationId;
     private String guestName;
@@ -35,50 +41,69 @@ class Reservation {
     }
 }
 
-class BookingHistory {
-    private List<Reservation> confirmedBookings = new ArrayList<>();
+class Inventory {
+    private Map<String, Integer> roomAvailability = new HashMap<>();
 
-    public void addBooking(Reservation reservation) {
-        confirmedBookings.add(reservation);
+    public Inventory() {
+        roomAvailability.put("Standard", 2);
+        roomAvailability.put("Deluxe", 1);
+        roomAvailability.put("Suite", 1);
     }
 
-    public List<Reservation> getAllBookings() {
-        return confirmedBookings;
+    public void validateAndBook(String roomType) throws InvalidBookingException {
+        if (!roomAvailability.containsKey(roomType)) {
+            throw new InvalidBookingException("Invalid room type: " + roomType);
+        }
+        int available = roomAvailability.get(roomType);
+        if (available <= 0) {
+            throw new InvalidBookingException("No rooms available for type: " + roomType);
+        }
+        roomAvailability.put(roomType, available - 1);
+    }
+
+    public Map<String, Integer> getAvailability() {
+        return roomAvailability;
     }
 }
 
-class BookingReportService {
-    private BookingHistory history;
+public class bookmystayapp {
+    public static void main(String[] args) {
+        Inventory inventory = new Inventory();
+        List<Reservation> confirmedReservations = new ArrayList<>();
 
-    public BookingReportService(BookingHistory history) {
-        this.history = history;
-    }
+        try {
+            inventory.validateAndBook("Deluxe");
+            Reservation r1 = new Reservation("RES201", "Alice", "Deluxe", 3000.0);
+            confirmedReservations.add(r1);
+            System.out.println("Booking confirmed: " + r1);
+        } catch (InvalidBookingException e) {
+            System.out.println("Booking failed: " + e.getMessage());
+        }
 
-    public void generateReport() {
-        List<Reservation> bookings = history.getAllBookings();
-        System.out.println("=== Booking Report ===");
-        for (Reservation r : bookings) {
+        try {
+            inventory.validateAndBook("Penthouse");
+            Reservation r2 = new Reservation("RES202", "Bob", "Penthouse", 8000.0);
+            confirmedReservations.add(r2);
+            System.out.println("Booking confirmed: " + r2);
+        } catch (InvalidBookingException e) {
+            System.out.println("Booking failed: " + e.getMessage());
+        }
+
+        try {
+            inventory.validateAndBook("Deluxe");
+            Reservation r3 = new Reservation("RES203", "Charlie", "Deluxe", 3000.0);
+            confirmedReservations.add(r3);
+            System.out.println("Booking confirmed: " + r3);
+        } catch (InvalidBookingException e) {
+            System.out.println("Booking failed: " + e.getMessage());
+        }
+
+        System.out.println("=== Final Confirmed Reservations ===");
+        for (Reservation r : confirmedReservations) {
             System.out.println(r);
         }
-        double totalRevenue = bookings.stream().mapToDouble(Reservation::getCost).sum();
-        System.out.println("Total Bookings: " + bookings.size());
-        System.out.println("Total Revenue: ₹" + totalRevenue);
-    }
-}
 
-public class bookmystayapp{
-    public static void main(String[] args) {
-        BookingHistory history = new BookingHistory();
-        BookingReportService reportService = new BookingReportService(history);
-
-        Reservation r1 = new Reservation("RES101", "Alice", "Deluxe", 3000.0);
-        Reservation r2 = new Reservation("RES102", "Bob", "Suite", 5000.0);
-        Reservation r3 = new Reservation("RES103", "Charlie", "Standard", 2000.0);
-
-        history.addBooking(r1);
-        history.addBooking(r2);
-        history.addBooking(r3);
-
-        reportService.generateReport();
+        System.out.println("=== Remaining Inventory ===");
+        System.out.println(inventory.getAvailability());
     }
 }
